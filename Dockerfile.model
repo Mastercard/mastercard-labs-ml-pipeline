@@ -3,7 +3,7 @@ FROM tensorflow/tensorflow:1.13.1
 
 ADD ctp_model.py /opt/ctp_model.py
 
-ADD input/santander-ctp/trainSample.csv /opt/train.csv
+ADD input/santander-ctp/train.csv /opt/train.csv
 
 RUN chmod +x /opt/ctp_model.py
 

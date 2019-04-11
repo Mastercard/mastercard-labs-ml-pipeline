@@ -1,10 +1,23 @@
-# Kubeflow Public Demo
+# Kubeflow Customer Transaction Prediction Demo
 This is a public demo to demonstrate the capabilities of a Kubernates-based Machine learning toolkit called Kubeflow.
  Kubeflow is very handy in building end-to-end machine learning pipelines. 
  
  In this demo, we will demonstrate an end-to-end ML pipeline that starts with preporcessing and training the model 
  till serving the trained model via a web frontend.
-
+ 
+## Getting the data
+This demo uses the anonymized customer transaction data from Santander. To the demo code running you'll need to go to
+ their [Kaggle competition page](https://www.kaggle.com/c/santander-customer-transaction-prediction), then go to the 
+ data section and finally accept the competition rule to be able to download the data.
+ ### Update Dockerfile.model to use your download data
+ you'll need to update Dockerfile.model to point to the download data. Specially, you'll need to update 
+ `input/santander-ctp/train.csv` part of this line: 
+ ```
+ ADD input/santander-ctp/train.csv /opt/train.csv
+ ```
+  
+  you'll need to leave `/opt/train.csv` unchanged.
+ 
 ## Deploying the pipeline to GCP
 In this section, we'll use deploy our entire pipeline to Google Cloud. The following will be covered here:
 
