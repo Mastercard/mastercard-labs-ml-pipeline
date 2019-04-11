@@ -55,11 +55,14 @@ def random_transaction():
     """
     data = pd.read_csv('/home/test.csv')
 
-    # Dropping ID and target columns
-    data.drop(['ID_code', 'target'], axis=1, inplace=True)
-
     # Generating random number between 0 and 200
     tnx_index = random.randint(0,200)
+
+    # Getting the actual target for the transactions
+    target = data.iloc[tnx_index]['target'][0]
+
+    # Dropping ID and target columns
+    data.drop(['ID_code', 'target'], axis=1, inplace=True)
 
     # Getting the required row in the data
     tnx = data.iloc[tnx_index].values
@@ -67,4 +70,4 @@ def random_transaction():
     # Convert the row into CS String value
     tnx_info = [','.join(str(e) for e in tnx)]
 
-    return tnx_info
+    return tnx_info, target

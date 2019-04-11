@@ -45,7 +45,7 @@ ADD static/styles /home/static/styles/
 RUN mkdir /home/static/tmp/
 ADD static/scripts/ /home/static/scripts/
 ADD static/imgs/ /home/static/imgs/
-ADD data/trainSample.csv /home/test.csv
+ADD data/test.csv /home/test.csv
 
 # start server on port 5000
 WORKDIR /home/

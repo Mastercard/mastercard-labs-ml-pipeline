@@ -20,7 +20,7 @@ def main():
     try:
 
         # Get random transaction
-        tnx_info = random_transaction()
+        tnx_info, target = random_transaction()
         # get prediction from TensorFlow server
         pred, scores = get_prediction(tnx_info, server_host=addr_arg,
                                       server_port=int(port_arg),
@@ -32,7 +32,7 @@ def main():
         scores_dict = []
         for i in range(0, 2):
             scores_dict += [{"index": str(i), "val": scores[i]}]
-        output = {"truth": pred, "prediction": pred,
+        output = {"truth": target, "prediction": pred,
                   "tnx_info": tnx_info, "scores": scores_dict}
     except Exception as e:  # pylint: disable=broad-except
         logging.info("Exception occured: %s", e)
