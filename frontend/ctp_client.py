@@ -59,7 +59,7 @@ def random_transaction():
     tnx_index = random.randint(0,200)
 
     # Getting the actual target for the transactions
-    target = data.iloc[tnx_index]['target'][0]
+    target = data.iloc[tnx_index]['target']
 
     # Dropping ID and target columns
     data.drop(['ID_code', 'target'], axis=1, inplace=True)
