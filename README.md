@@ -265,7 +265,7 @@ following target to get the external IP of the output and use it in the browser 
 ```
 # get external IP for the frontend service
 frontend-external-ip:
-	kubectl get serving-the-trained-modelvice web-ui
+	kubectl get service web-ui
 ```
 
 A success message for the connection between the frontend and the serving pod will be shown in the frontend. 
