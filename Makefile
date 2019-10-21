@@ -3,28 +3,32 @@
 
 
 # Default project ID, zone and deployment name
-PROJECT_ID :=kfdemo-233821
+PROJECT_ID :=kf-pipelines
 ZONE :=us-central1-a
-DEPLOYMENT_NAME :=kfdemo-deployment
-KS_NAME :=test_ks_app
-BUCKET_NAME :=$(KS_NAME)-$(PROJECT_ID)
+DEPLOYMENT_NAME :=kubeflow
+
+BUCKET_NAME :=$(PROJECT_ID)
+
+#KS_NAME :=test_ks_app
+#BUCKET_NAME :=$(KS_NAME)-$(PROJECT_ID)
 
 # logdir for tensorboard
-LOGDIR=gs://${BUCKET_NAME}/${MODEL_PATH}
-MODEL_PATH:=my-model
+#LOGDIR=gs://${BUCKET_NAME}/${MODEL_PATH}
+#MODEL_PATH:=my-model
 
 #set the path on GCR for pushing the images that will be used by kubeflow
-TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train
+#TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train
 
 
-TAG := $(shell date +v%Y%m%d)
-all: build
+#TAG := $(shell date +v%Y%m%d)
+#all: build
 
 
 #Kubeflow version
-KF_VERSION:=v0.4.1
+#KF_VERSION:=v0.4.1
 
-WORKING_DIR := $(shell pwd)
+WORKING_DIR := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/kubeflow/dnntrainer
+WEBAPP_DIR := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/webapp
 
 # Setting the environment variables for GKE
 set-gcloud-project:
@@ -37,124 +41,91 @@ connect-to-cluster: set-gcloud-project
 	kubectl config set-context $(shell kubectl config current-context) --namespace kubeflow
 	kubectl get nodes
 
-# create and configure ksonnet app
-init-ks-app:
-	ks init $(KS_NAME) && \
-	cd $(KS_NAME) && \
-	ks env list && \
-	cp $(WORKING_DIR)/demo_ks_app/components/* $(WORKING_DIR)/$(KS_NAME)/components && \
-	ks registry add kubeflow github.com/kubeflow/kubeflow/tree/$(KF_VERSION)/kubeflow && \
-    ks pkg install kubeflow/tf-serving@$(KF_VERSION) && \
-	ks component list
-
-
 # Creating bucket for holding the training data and exported models
 create-gcs-bucket:
 	gsutil mb gs://$(BUCKET_NAME)/
 
+
+TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train_boosted11:v0.3
+
+WEBAPP_PATH :=us.gcr.io/$(PROJECT_ID)/ml-pipeline-webapp-launcher:v0.3
+
 #build the tensorflow model into a container
 build-train-image:
-	docker build $(WORKING_DIR) -t $(TRAIN_PATH) -f $(WORKING_DIR)/Dockerfile.model
-
-
-# Test training image locally
-test-train-image-local:
-	docker run -it $(TRAIN_PATH)
+	mkdir -p $(WORKING_DIR)/build && \
+	rsync -arvp $(WORKING_DIR)/src/ $(WORKING_DIR)/build/ && \
+	docker build $(WORKING_DIR) -t $(TRAIN_PATH) -f $(WORKING_DIR)/Dockerfile --build-arg TF_TAG=1.13.2
 
 #authorize docker to access GCR and push train image
 push-train-image: build-train-image
 	gcloud auth configure-docker --quiet
 	docker push $(TRAIN_PATH)
 
+#build the tensorflow model into a container
+build-webapp-image:
+	mkdir -p $(WEBAPP_DIR)/build && \
+	rsync -arvp $(WEBAPP_DIR)/webapp-launcher/ $(WEBAPP_DIR)/build/ && \
+	docker build $(WEBAPP_DIR) -t $(WEBAPP_PATH) -f $(WEBAPP_DIR)/Dockerfile
 
-#set the parameters for the tfjob
-set-train-params:
-	cd $(KS_NAME) && \
-	ks param set train image $(TRAIN_PATH) && \
-	ks param set train name "my-train-1" && \
-	ks param set train modelDir gs://$(BUCKET_NAME)/$(MODEL_PATH) && \
-	ks param set train exportDir gs://$(BUCKET_NAME)/$(MODEL_PATH)/export && \
-	ks param set train secret user-gcp-sa=/var/secrets && \
-	ks param set train envVariables GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/user-gcp-sa.json
+#authorize docker to access GCR and push train image
+push-webapp-image: build-webapp-image
+	gcloud auth configure-docker --quiet
+	docker push $(WEBAPP_PATH)
 
-
-# deploy the training image to kubeflow
-deploy-train-job: push-train-image set-train-params
-	cd $(KS_NAME) && \
-	ks apply default -c train
-
-
-# setting tensorboard params
-set-tensorboard-params:
-	cd $(KS_NAME) && \
-	ks param set tensorboard logDir $(LOGDIR) && \
-	ks param set tensorboard secret user-gcp-sa=/var/secrets && \
-	ks param set tensorboard envVariables GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/user-gcp-sa.json
-
-# deploy tensorboard
-deploy-tensorboard: set-tensorboard-params
-	cd $(KS_NAME) && \
-	ks show default -c tensorboard && \
-	ks apply default -c tensorboard
-
-
-TB_HOST_PORT:=8090
-
-# port-forwarding tensorboard to be accessed locally
-access-tensorboard-local:
-	kubectl port-forward service/tensorboard-tb $(TB_HOST_PORT):80
-	@echo TensorBoard can now be accessed at http://127.0.0.1:$(TB_HOST_PORT)
-
-# model serving
-set-model-serving-params:
-	cd $(KS_NAME) && \
-	ks param set kfdemo-deploy-gcp modelBasePath gs://$(BUCKET_NAME)/${MODEL_PATH}/export && \
-	ks param set kfdemo-deploy-gcp modelName kfdemo
-
-# deploy the training image to kubeflow
-deploy-serving-job: set-model-serving-params
-	cd $(KS_NAME) && \
-	ks apply default -c kfdemo-deploy-gcp && \
-	ks apply default -c kfdemo-service
 
 #Building the frontend container
-FRONTEND_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-frontend
-TAG:=v2.6
+FRONTEND_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-frontend-santander
+TAG:=v3.4
+
+PREDICT_PATH := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/kubeflow
+
+PREDICT_IMAGE :=us.gcr.io/$(PROJECT_ID)/kubeflow-predict
+TAG:=v2.5
+
 
 # Build the frontend container
-build-frontend:
-	docker build $(WORKING_DIR)/frontend -t $(FRONTEND_PATH):$(TAG)
-
+build-predict-image:
+	docker build $(PREDICT_PATH)/predict -t $(PREDICT_IMAGE):$(TAG)
 
 # Authorize docker and push the frontend image
-push-frontend-image: build-frontend
+push-predict-image: build-predict-image
+	gcloud auth configure-docker --quiet
+	docker push $(PREDICT_IMAGE):$(TAG)
+
+
+# Build the frontend container
+build-frontend-image:
+	docker build $(WEBAPP_DIR)/frontend -t $(FRONTEND_PATH):$(TAG)
+
+# Authorize docker and push the frontend image
+push-frontend-image: build-frontend-image
 	gcloud auth configure-docker --quiet
 	docker push $(FRONTEND_PATH):$(TAG)
 
 
-#setting frontend parameters
-set-frontend-params:
-	cd $(KS_NAME) && \
-	ks param set web-ui image $(FRONTEND_PATH):$(TAG) && \
-	ks param set web-ui type LoadBalancer
+PRE_PATH := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/dataflow
 
-# deploy the frontend
-deploy-frontend: set-frontend-params push-frontend-image
-	cd $(KS_NAME) && \
-	ks apply default -c web-ui
+PRE_IMAGE :=us.gcr.io/$(PROJECT_ID)/kubeflow-preprocess
+TAG:=v0.3
 
+
+# Build the frontend container
+build-preprocess-image:
+	docker build $(PRE_PATH)/tft -t $(PRE_IMAGE):$(TAG)
+
+# Authorize docker and push the frontend image
+push-preprocess-image: build-preprocess-image
+	gcloud auth configure-docker --quiet
+	docker push $(PRE_IMAGE):$(TAG)
 
 # get external IP for the frontend service
 frontend-external-ip:
-	kubectl get service web-ui
+	kubectl get service santanderapp-webappsvc
 
-# delete the cluster and other resouces provisioned by kubeflow
-clean-all:
-	rm -r $(KS_NAME)
-	gcloud deployment-manager deployments delete $(DEPLOYMENT_NAME)
-	gsutil rm -r gs://$(BUCKET_NAME)
-#	gcloud container images delete us.gcr.io/$(PROJECT_ID)/kubeflow-train
-#	gcloud container images delete $(FRONTEND_PATH):$(TAG)
+clean:
+	kubectl delete svc --ignore-not-found kfdemo-service
+	kubectl delete deployment --ignore-not-found kfdemo-service-v1
+	kubectl delete svc --ignore-not-found santanderapp-webappsvc
+	kubectl delete deployment --ignore-not-found santanderapp-webapp
+#	kubectl delete workflows --all
 
-list-model-files:
-	gsutil ls -r gs://$(BUCKET_NAME)/$(MODEL_PATH)/export
