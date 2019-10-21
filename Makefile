@@ -104,10 +104,7 @@ push-preprocess-image: build-preprocess-image
 frontend-external-ip:
 	kubectl get service santanderapp-webappsvc
 
-clean:
-	kubectl delete svc --ignore-not-found kfdemo-service
-	kubectl delete deployment --ignore-not-found kfdemo-service-v1
-	kubectl delete svc --ignore-not-found santanderapp-webappsvc
-	kubectl delete deployment --ignore-not-found santanderapp-webapp
-	kubectl delete workflows --all
+# delete the cluster and other resouces provisioned by kubeflow
+clean-all:
+	gcloud deployment-manager deployments delete $(DEPLOYMENT_NAME)
 
