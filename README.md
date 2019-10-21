@@ -1,12 +1,11 @@
 # Kubeflow Customer Transaction Prediction Demo
-This is a public demo to demonstrate the capabilities of a Kubernates-based Machine learning toolkit called Kubeflow.
+This is a public demo to demonstrate the capabilities of a Kubernetes-based Machine learning toolkit called Kubeflow.
  Kubeflow is very handy in building end-to-end machine learning pipelines. 
- 
  In this demo, we will demonstrate an end-to-end ML pipeline that starts with preporcessing and training the model 
  till serving the trained model via a web frontend.
  
 ## Getting the data
-This demo uses the anonymized customer transaction data from Santander. To the demo code running you'll need to go to
+This demo uses the anonymized customer transaction data from Santander. To get the demo code running you'll need to go to
  their [Kaggle competition page](https://www.kaggle.com/c/santander-customer-transaction-prediction), then go to the 
  data section and finally accept the competition rule to be able to download the data.
  ### Update Dockerfile.model to use your download data
@@ -16,8 +15,16 @@ This demo uses the anonymized customer transaction data from Santander. To the d
  ADD input/santander-ctp/train.csv /opt/train.csv
  ```
   
-  you'll need to leave `/opt/train.csv` unchanged.
+ you'll need to leave `/opt/train.csv` unchanged.
  
+
+## Creating an account on GCP 
+
+You'll need to have an unlocked Google Cloud account to run this tutorial. You can create your account at this address
+ [GCloud](https://cloud.google.com) using the free trial.  You will get 300$ which will be more than enough to run everything.
+ However, because deploying the cluster requires more CPUs that are made availabe for the free trial, you'll have to unlock your account.
+ We suggest that you put an alert on the spending so that when you are running low on funds, GCP will let you know and you won't verspend
+
 ## Deploying the pipeline to GCP
 In this section, we'll use deploy our entire pipeline to Google Cloud. The following will be covered here:
 
@@ -35,19 +42,19 @@ In this section, we'll use deploy our entire pipeline to Google Cloud. The follo
 ### Creating and connecting to the cluster <a name="creating-and-connecting-to-the-cluster"></a>
 
 Before you start you'll need to have project created in Google Cloud and we'll refer to this project by the variable 
-`PROJECT_ID`. You'll also need to activate the required Services for the project(i.e. Kubernetes Engine).
+`PROJECT_ID`. You'll also need to activate the required Services for the project(i.e. Kubernetes Engine). You don't need
+to create the cluster yourself, the script that deploy kubeflow will take care of this automatically. You will be ask to
+select a zone in which your project will be deployed (by default `us-central1-a`), we will refer to it by $ZONE in the future.
 
 Next up, you'll need to use kubeflow click and deploy UI to create a kubeflow deployment on google cloud.
-
-Open https://deploy.kubeflow.cloud/#/deploy and Fill in the following values in the resulting form:
+Open https://deploy.kubeflow.cloud/#/deploy and fill in the following values in the resulting form:
 
 1. Project: Enter your GCP $PROJECT_ID in the top field
 2. Deployment name: Set the default value to `kfdemo-deployment`. Alternatively, set `$DEPLOYMENT_NAME` in the 
 makefile to a different value.
-3. GKE Zone: Use the value you have set for $ZONE, selecting it from the pulldown.
-4. Kubeflow Version: v0.4.1
-5. Check the Skip IAP box
-
+3. Choose how to connect: Setup Endpoint later.
+4. GKE Zone: Use the value you have set for $ZONE, selecting it from the pulldown.
+5. Kubeflow Version: v0.5. If not available, choose the most recent version
 
 After it shows you in the log console that the deployment is ready, you can use `make connect-to-cluster` to execute 
 the following targets:
@@ -87,26 +94,27 @@ init-ks-app:
 	ks component list
 ```
 
-The output of this target should be a list of the components with tf-serving as one of thme.
+The output of this target should be a list of the components with tf-serving as one of them.
 
 ### Creating the bucket needed for storing data/models <a name="creating-the-bucket-needed-for-storing-datamodels"></a>
 
-We need a bucket to be able to export the trained models to it. executing the following command via `make 
-create-gcs-bucket` will create a bucket with the name stored in `BUCKET_NAME` variable.
+In order to have storage space where we will have our data and model, we need to create a bucket. Calling the target `create-gcs-bucket` 
+will create a bucket with the name stored in the variable `BUCKET_NAME`.
+
 ```
 create-gcs-bucket:
 	gsutil mb gs://$(BUCKET_NAME)/
 ```
+
 ### Training the model <a name="training-the-model"></a>
 
-Now we have the `kubectl` tool configured to make deployments against the cluster and a bucket to export the trained 
-model we need to to do the first step in our ML pipeline which is preprocessing and training on the data. In this 
-section we are building the image the contains the trainer code, test the image locally, push the image to google 
-cloud docker registry and finally deploy this training job to kubernetes.
-
+We now have the `kubectl` tool configured to make deployments against the cluster and a bucket to store our data and our trained model. 
+We can finally proceed with the first step of our ML pipeline: Preprocessing and Training on the data. 
+In this section we will build the container that will hold the code to train our model. When the image is build, 
+we will test it locally and proceed to push it to google cloud docker registry before finally deploying the training job to kubernetes.
 
 The following target will build the image from the docker file in the `WORKING_DIR` and tag the image with google 
-cloud docker registry. In this case it's `TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train`
+cloud docker registry. In our case `TRAIN_PATH` corresponds to `TRAIN_PATH:=us.gcr.io/$(PROJECT_ID)/kubeflow-train`
 ```
 #build the tensorflow model into a container
 build-train-image:
@@ -121,16 +129,21 @@ and deploying it to the cluster.
 test-train-image-local:
 	docker run -it $(TRAIN_PATH)
 ```
-Nextt up we'll need to authorize docker to access google cloud registry and be able to push images to it:
+
+Next, we'll need to authorize docker to access google cloud registry and be able to push images to it:
 ```
 #authorize docker to access GCR and push train image
 push-train-image: build-train-image
 	gcloud auth configure-docker --quiet
 	docker push $(TRAIN_PATH)
 ```
+<!-- COMMENT: when arrived here, user will have already run the build-train-image so we might want to remove the build-train-image from
+the target -->
 
-Now we have the training image we can set the parameters for the `train` tfjob by pointing to the ksonnet app 
-directory and setting the required parameters.
+Now that we have the training image, we can set the parameters for the `train` tfjob by pointing to the ksonnet app 
+directory and setting the required parameters. By running the target `deploy-train-job` we will execute the target `set-train-params` that
+will setup the parameters and deploy the tfjob to kubernetes
+
 ```
 #set the parameters for the tfjob
 set-train-params:
@@ -141,12 +154,7 @@ set-train-params:
 	ks param set train exportDir gs://$(BUCKET_NAME)/$(MODEL_PATH)/export && \
 	ks param set train secret user-gcp-sa=/var/secrets && \
 	ks param set train envVariables GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/user-gcp-sa.json
-```
 
-Finally, use the following target `make deploy-train-job` will execute the previous targets first and then deploy the
- train tfjob to kubernetes.
-
-```
 # deploy the training image to kubeflow
 deploy-train-job: push-train-image set-train-params
 	cd $(KS_NAME) && \
@@ -154,10 +162,13 @@ deploy-train-job: push-train-image set-train-params
 
 ```
 
+<!-- COMMENT: Same as before, we might want to remove the push-train-image from the target -->
+
 ### Monitoring the training job <a name="monitoring-the-training-job"></a>
 
 We can use `TensorBoard` to visualize the model accuracy progression over time. We just need to set `logDir` 
 parameter of the `tensorboard` component.
+
 ```
 # setting tensorboard params
 set-tensorboard-params:
@@ -184,15 +195,17 @@ access-tensorboard-local:
 	@echo TensorBoard can now be accessed at http://127.0.0.1:$(TB_HOST_PORT)
 ```
 
+<!-- COMMENT: Wasn't able to make this part work somehow, but I didn't push too hard, I'll get back on it latter -->
+
+
 TensorBoard can now be accessed at `http://127.0.0.1:$(TB_HOST_PORT)`
 
 ### Training at Scale <a name="training-at-scale"></a>
 TODO
 ### Serving the trained model <a name="serving-the-trained-model"></a>
 
-The Next step in the ML pipeline is to deploy the trained model using `TensorFlow TFX` or more specificly `TF Serving`
-
-Executing the following target via `make dpeloy-serving-job` will deploy the serving job
+The next step in the ML pipeline is to deploy the trained model using `TensorFlow TFX` or more specificly `TF Serving`.
+Executing the following target via `make deloy-serving-job` will set the parameters required and deploy the serving job.
 
 ```
 # model serving
@@ -207,11 +220,12 @@ deploy-serving-job: set-model-serving-params
 	ks apply default -c kfdemo-deploy-gcp && \
 	ks apply default -c kfdemo-service
 ```
+
 ### Deploying frontend <a name="deploying-frontend"></a>
 
-Finally, we'll need to build, push and deploy the frontend image.
+Finally, we'll build, push and deploy the frontend image.
+By executing the target `push-frontend-image`, you will build the image and push it to gcloud container registery. You can override the image `TAG` by different version. 
 
-Execute the following target to build the image and you can override the image `TAG` by different version. 
 ```
 #Building the frontend container
 FRONTEND_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-frontend
@@ -229,7 +243,7 @@ push-frontend-image: build-frontend
 ```
 
 After building and pushing the image, we'll need to set the required params for the `web-ui` component in the ksonnet
- app. This param include image name that we built earlier.
+ app. By executing the command `make deploy-frontend`, it will set the frontend parameters and deploy the `web-ui` component.
  
 ```
 #setting frontend parameters
@@ -237,18 +251,17 @@ set-frontend-params:
 	cd $(KS_NAME) && \
 	ks param set web-ui image $(FRONTEND_PATH):$(TAG) && \
 	ks param set web-ui type LoadBalancer
-```
 
-Finally you can execute `make deploy-frontend` command to deploy the `web-ui` component.
-```
 # deploy the frontend
 deploy-frontend: set-frontend-params push-frontend-image
 	cd $(KS_NAME) && \
 	ks apply default -c web-ui
 ```
 
-To be able to access the web-ui from externally(outside of the kubernetes cluster), we'll need to execute the 
-following target, get the external IP of the output and use it in the browser to access the frontend.
+
+To be able to access the web-ui from outside of the kubernetes cluster, we'll need to execute the 
+following target to get the external IP of the output and use it in the browser to access the frontend.
+
 ```
 # get external IP for the frontend service
 frontend-external-ip:
@@ -259,8 +272,7 @@ A success message for the connection between the frontend and the serving pod wi
 Otherwise, you won't be able to connect to the serving pod and test the trained model.
 
 ### Cleaning all <a name="cleaning-all"></a>
-Most importantly is to delete all the created resources on google cloud after demonstrating the full working ML 
-pipeline
+To delete all the resources created on google cloud after running this tutorial, you can execute the following command `make clean-all`
 
 ```
 # delete the cluster and other resouces provisioned by kubeflow
