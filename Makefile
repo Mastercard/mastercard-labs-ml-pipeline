@@ -9,26 +9,8 @@ DEPLOYMENT_NAME :=kubeflow
 
 BUCKET_NAME :=$(PROJECT_ID)
 
-#KS_NAME :=test_ks_app
-#BUCKET_NAME :=$(KS_NAME)-$(PROJECT_ID)
-
-# logdir for tensorboard
-#LOGDIR=gs://${BUCKET_NAME}/${MODEL_PATH}
-#MODEL_PATH:=my-model
-
-#set the path on GCR for pushing the images that will be used by kubeflow
-#TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train
-
-
-#TAG := $(shell date +v%Y%m%d)
-#all: build
-
-
-#Kubeflow version
-#KF_VERSION:=v0.4.1
-
-WORKING_DIR := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/kubeflow/dnntrainer
-WEBAPP_DIR := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/webapp
+WORKING_DIR := kf-pipelines/pipeline_steps/kubeflow/dnntrainer
+WEBAPP_DIR := kf-pipelines/pipeline_steps/webapp
 
 # Setting the environment variables for GKE
 set-gcloud-project:
@@ -46,7 +28,7 @@ create-gcs-bucket:
 	gsutil mb gs://$(BUCKET_NAME)/
 
 
-TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train_boosted11:v0.3
+TRAIN_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-train_boosted:v0.4
 
 WEBAPP_PATH :=us.gcr.io/$(PROJECT_ID)/ml-pipeline-webapp-launcher:v0.3
 
@@ -77,7 +59,7 @@ push-webapp-image: build-webapp-image
 FRONTEND_PATH :=us.gcr.io/$(PROJECT_ID)/kubeflow-frontend-santander
 TAG:=v3.4
 
-PREDICT_PATH := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/kubeflow
+PREDICT_PATH := kf-pipelines/tfx/pipeline_steps/kubeflow
 
 PREDICT_IMAGE :=us.gcr.io/$(PROJECT_ID)/kubeflow-predict
 TAG:=v2.5
@@ -103,7 +85,7 @@ push-frontend-image: build-frontend-image
 	docker push $(FRONTEND_PATH):$(TAG)
 
 
-PRE_PATH := /Users/ahmedmenshawy/mastercard/projects/kf-pipelines/tfx/pipeline_steps/dataflow
+PRE_PATH := kf-pipelines/tfx/pipeline_steps/dataflow
 
 PRE_IMAGE :=us.gcr.io/$(PROJECT_ID)/kubeflow-preprocess
 TAG:=v0.3
@@ -127,5 +109,5 @@ clean:
 	kubectl delete deployment --ignore-not-found kfdemo-service-v1
 	kubectl delete svc --ignore-not-found santanderapp-webappsvc
 	kubectl delete deployment --ignore-not-found santanderapp-webapp
-#	kubectl delete workflows --all
+	kubectl delete workflows --all
 
